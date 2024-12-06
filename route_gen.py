@@ -28,32 +28,43 @@ import asyncio
 import pprint
 from typing import TypedDict
 from itertools import batched
+from datetime import datetime
 
 ## Default Values
-defult_file_path: str = "bhn_trip_routes.csv"
-nominatim_url: str = "nominatim.openstreetmap.org"
-routing_host: str = "valhalla1.openstreetmap.de"
+global_file_path: str = "input.csv"
+global_nominatim_url: str = "nominatim.openstreetmap.org"
+global_routing_host: str = "valhalla1.openstreetmap.de"
 global_http_chunks = 2
-global_http_delay = 1
+global_http_delay = 0.15
+global_fixed_speed = 41
+global_top_speed = 59
 
 ## Shared Types
-Coord = TypedDict("Coord", {"lat": float, "lon": float, "address": str })
+Coord = TypedDict("Coord", {"lat": float, "lon": float})
 Location = TypedDict("Location", { "name": str, "address": str, "lat": float, "lon": float})
 RouteInfo = TypedDict("RouteInfo", {
-    "trip_length": str,
-    "trip_time": str,
+    "trip_code": str,
+    "length": str,
+    "time": str,
     "source": Coord,
     "destination": Coord,
 })
 TripInfo = TypedDict("TripInfo", {
     "trip_code": str,
-    "trip_distance": str,
-    "trip_time": str,
-    "trip_source": str,
+    "length": str,
+    "time": str,
+    "source": str,
     "source_coords": str,
-    "trip_destination": str,
+    "destination": str,
     "destination_coords": str,
 })
+
+def current_time() -> str:
+    now = datetime.now()
+    return now.strftime("%H:%M:%S")
+
+def log_info(message: str)-> None:
+    print("{0} | {1}".format(current_time(), message))
 
 class coord_service:
     geocoding_host: str
@@ -91,11 +102,14 @@ class coord_service:
             payload = json.dumps({
               "format": "json",
               "shape_format": "polyline6",
-              "costing": "truck",
               "units": "kilometers",
               "alternates": 0,
               "search_filter": {
                 "exclude_closures": True
+              },
+              "costing": "auto",
+              "costing_options": {
+                  "auto": { "fixed_speed": global_fixed_speed, "top_speed": global_top_speed }
               },
               "locations": [
                 {
@@ -127,10 +141,12 @@ class coord_service:
 
 
 
-class data_loader:
+class data_handler:
     file_path = ""
     source_data = []
     locations: list[Location] = []
+    routes: list[RouteInfo] = []
+    trips: list[TripInfo] = []
 
     def __init__(self, path: str) -> None:
         self.file_path = path
@@ -147,9 +163,11 @@ class data_loader:
                 for line_item in self.source_data:
                     source_value = re.sub(r'[^a-zA-Z0-9\s]', ' ', line_item["source"]).capitalize()
                     destination_value = re.sub(r'[^a-zA-Z0-9\s]', ' ', line_item["destination"]).capitalize()
-                    
+                    trip_code: str = line_item["trip_code"]
+
                     line_item["source"] = source_value
                     line_item["destination"] = destination_value
+                    line_item["trip_code"] = trip_code.lower()
 
         except IOError:
            print("There was an error writing to", self.file_path)
@@ -172,24 +190,39 @@ class data_loader:
                 if(check_destination is None or len(check_destination) < 1):
                     self.locations.append({ 'name': trip_destination })
 
-        print("Loaded {0} locations for processing...".format(len(self.locations)))
+        log_info("Loaded {0} locations for processing...".format(len(self.locations)))
 
 
 
 class data_processing:
-    data: data_loader
+    data: data_handler
     service: coord_service
-
-    def __init__(self, data: data_loader, service: coord_service) -> None:
+    location_pool: list[Location]
+    
+    def __init__(self, data: data_handler, service: coord_service) -> None:
         self.data = data
         self.service = service
+    
+    @classmethod
+    async def bootstrap(cls, data: data_handler, service: coord_service):
+        self = cls(data, service)
+        
+        ## Execute constrcutor async method
+        self.location_pool = await self.__geocode_coords();
+        self.data.routes = await self.__process_routes();
+        
+        return self
 
-    async def geocode_coords(self) -> list[Location]:
+
+    async def __geocode_coords(self) -> list[Location]:
         # Local coord resolver functions
         async def resolve_location(name: str, delay: float = 0.15) -> Location:
             await asyncio.sleep(delay)
             
-            return self.service.get_coords(name)
+            response = self.service.get_coords(name)
+            log_info("Name: {0}, Lat: {1}, Lon: {2}".format(response["name"], response["lat"], response["lon"]))
+            
+            return response
 
         async def exec_chunked(location_chunk: list[Location]):
             chunk_tasks = [resolve_location(loc["name"], global_http_delay) for loc in location_chunk]
@@ -200,25 +233,65 @@ class data_processing:
         try:
             chunked_locations = list(batched(self.data.locations, global_http_chunks))
             tasks = [exec_chunked(loc_chunks) for loc_chunks in chunked_locations]
-            all_location: list[list[Location]] = await asyncio.gather(*tasks)
-            location_results = [item for sublist in all_location for item in sublist]
             
-            return location_results
+            log_info("Started resolving {0} locations for coordinates...".format(len(self.data.locations)))
+            grouped_location: list[list[Location]] = await asyncio.gather(*tasks)
+            
+            log_info("Completed resolving locations...")
+
+            all = [item for sublist in grouped_location for item in sublist]
+            
+            # update tagged data
+            for local_item in self.data.locations:
+                loc: Location = next((item for item in all if item['name'] == local_item["name"]), None)
+                local_item.update(loc)
+                    
+            return all
+            
         except Exception:
-            print('Error loading coordinates...')
+            log_info('Error processing coordinates...')
             return []
 
-    def process_routes(self) -> list[TripInfo]:
+    async def __process_routes(self) -> list[TripInfo]:
+        try:
+            if(len(self.location_pool) > 0):
+                query_data: list = self.data.source_data
+                
+                async def exec_delayed(trip_code: str, source: Coord, destination: Coord) -> RouteInfo:
+                    await asyncio.sleep(global_http_delay)
+                    response: RouteInfo = self.service.get_route_attributes(source, destination)
+                    distance = "{0}KM".format(response["length"])
+                    
+                    log_info("Load route ID:{0}, Time: {1}, Distance: {2}".format(
+                        trip_code,
+                        response["time"],
+                        distance
+                    ))
+                    
+                    return response
+                
+                tasks = []
+                for item in query_data:
+                    data_source: Location = self.data.get_location_object(item["source"])
+                    data_destination: Location = self.data.get_location_object(item["destination"])
+                    
+                    trip_code = item["trip_code"]
+                    source: Coord = { "lat": data_source["lat"], "lon": data_source["lon"] }
+                    destination: Coord = { "lat": data_destination["lat"], "lon": data_destination["lon"] }
+                    
+                    tasks.append(exec_delayed(trip_code, source, destination))
+                    
+                return await asyncio.gather(*tasks)
+            
+        except Exception as error:
+            log_info('Error processing route information'.format(error))
+            
         return []
 
 async def main():
-    processing = data_processing(data_loader(defult_file_path), coord_service(nominatim_url, routing_host))
-
-    locations = await processing.geocode_coords()
+    proc = await data_processing.bootstrap(data_handler(global_file_path), coord_service(global_nominatim_url, global_routing_host))
     
-    pprint.pprint(locations)
-
-        
+    # pprint.pprint(proc.data.trips)
 
 if __name__ == "__main__":
     asyncio.run(main())
