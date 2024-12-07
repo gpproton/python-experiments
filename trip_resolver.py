@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Copyright (c) 2024 drolx Labs
+Copyright (c) 2024 Godwin Peter .O
 
 Licensed under the MIT License
 you may not use this file except in compliance with the License.
@@ -32,8 +32,8 @@ from typing import TypedDict
 from dateutil.relativedelta import relativedelta
 
 ## Default Values
-global_input_file: str = "input.csv"
-global_output_file: str = "output.csv"
+global_input_file: str = "files/trip_input.csv"
+global_output_file: str = "files/trip_output.csv"
 global_nominatim_url: str = "nominatim.openstreetmap.org"
 global_routing_host: str = "valhalla1.openstreetmap.de"
 global_http_chunks = 2
