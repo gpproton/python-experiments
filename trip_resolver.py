@@ -163,6 +163,8 @@ class CoordService:
             return None
 
     def get_route_attributes(self, trip_code: str, source: Coord, destination: Coord) -> RouteInfo | None:
+        global global_fixed_speed
+        global global_top_speed
         try:
             conn = http.client.HTTPSConnection(self.routing_host)
             payload = json.dumps({
@@ -379,6 +381,7 @@ class DataProcessing:
         return self
 
     async def __geocode_coords(self) -> list[Location]:
+        global global_http_chunks
         # Local coord resolver functions
         async def resolve_location(name: str, delay: float = 0.15) -> Location:
             await asyncio.sleep(delay)
@@ -389,6 +392,7 @@ class DataProcessing:
             return response
 
         async def exec_chunked(location_chunk: list[Location] | tuple[dict[str, str | float], ...]) -> list[Location]:
+            global global_http_delay
             chunk_tasks = [resolve_location(location_item["name"], global_http_delay) for location_item in
                            location_chunk]
             result = await asyncio.gather(*chunk_tasks)
@@ -457,6 +461,10 @@ class DataProcessing:
 
 
 async def main():
+    global global_input_file
+    global global_output_file
+    global global_routing_host
+    global global_nominatim_url
     proc = await DataProcessing.bootstrap(DataHandler(global_input_file, global_output_file),
                                           CoordService(global_nominatim_url, global_routing_host))
 

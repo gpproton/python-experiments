@@ -1,6 +1,6 @@
 trip_code,length,time,source,source_coords,destination,destination_coords
 luc_ikoro_abakaliki_30_co_fl_d_l_xxx,601.317,14:42:07,Ikorodu,"6.6191233, 3.5041271",Abakaliki,"6.3208897, 8.1133202"
-luc_ikoro_abuja_30_co_fl_d_l_xxx,685.49,16:50:43,Ikorodu,"6.6191233, 3.5041271",Abuja,"9.0643305, 7.4892974"
+luc_ikoro_abuja_30_co_fl_d_l_xxx,692.935,17:01:43,Ikorodu,"6.6191233, 3.5041271",Abuja,"9.0643305, 7.4892974"
 luc_ikoro_ado_ekiti_30_co_fl_d_l_xxx,299.315,07:19:17,Ikorodu,"6.6191233, 3.5041271",Ado ekiti,"7.6232482, 5.22274"
 luc_ikoro_akure_30_co_fl_d_l_xxx,256.207,06:17:03,Ikorodu,"6.6191233, 3.5041271",Akure,"7.2525595, 5.1932647"
 luc_ikoro_asaba_30_co_fl_d_l_xxx,408.532,09:59:12,Ikorodu,"6.6191233, 3.5041271",Asaba,"6.1858825, 6.7297071"
