@@ -18,16 +18,17 @@ Modified By: Godwin peter .O
 Modified At: Sat Dec 07 2024
 """
 
+import asyncio
 import csv
-import sys
 import http.client
-import urllib.parse
 import json
 import re
-import asyncio
-from typing import TypedDict
-from itertools import batched
+import sys
+import urllib.parse
 from datetime import datetime
+from itertools import batched
+from typing import TypedDict
+
 from dateutil.relativedelta import relativedelta
 
 ## Default Values
@@ -62,8 +63,28 @@ TripInfo = TypedDict("TripInfo", {
 
 
 class Utils:
+    """
+    Utility class containing helper methods for logging and time formatting.
+
+
+
+    The Utils class offers simple utilities for managing log outputs and converting
+    time values for better readability. This is useful for debugging and timing solutions.
+
+
+        - current_time(): Returns the current system time formatted as HH:MM:SS.
+        - log_info(message: str): Logs the provided message with the current timestamp.
+        - format_time(value: float): Takes a number of seconds and formats it into HH:MM:SS.
+    """
+
     @classmethod
     def current_time(cls) -> str:
+        """
+        Get the current time formatted as HH:MM:SS.
+
+        Returns:
+            str: Current time in HH:MM:SS format.
+        """
         now = datetime.now()
         return now.strftime("%H:%M:%S")
 
@@ -80,6 +101,29 @@ class Utils:
 
 
 class CoordService:
+    """
+    Service class for geocoding and route resolution using HTTP APIs.
+
+    The CoordService class is designed to interact with geocoding and
+    routing services through HTTP requests, providing end-users the ability to resolve
+    addresses to coordinates and compute route attributes such as length and estimated travel time.
+
+    Class Attributes:
+        headers (dict): A dictionary containing default headers used for HTTP connections.
+
+    Attributes:
+        geocoding_host (str): Hostname for geocoding service.
+        routing_host (str): Hostname for routing service.
+
+    Methods:
+
+        - get_coords(address: str): Sends a request to the geocoding service to resolve
+          an address into geographic coordinates (latitude and longitude).
+        - get_route_attributes(trip_code: str, source: Coord, destination: Coord):
+          Queries the routing service to fetch route details including length and estimated duration
+          between specified coordinates.
+    """
+
     geocoding_host: str
     routing_host: str
     headers = {
@@ -88,10 +132,18 @@ class CoordService:
     }
 
     def __init__(self, geocoding_host: str, routing_host: str) -> None:
+        """
+        Initializes CoordService with specified geocoding and routing hostnames.
+
+
+        Args:
+            geocoding_host (str): Hostname for geocoding service.
+            routing_host (str): Hostname for routing service.
+        """
         self.geocoding_host = geocoding_host
         self.routing_host = routing_host
 
-    def get_coords(self, address: str) -> Location:
+    def get_coords(self, address: str) -> Location | None:
         try:
             conn = http.client.HTTPSConnection(self.geocoding_host)
             url_path = "/search?format=json&limit=1&addressdetails=0&email=dev@drolx.com&q=" + urllib.parse.quote(
@@ -106,10 +158,11 @@ class CoordService:
 
             return {"name": address, "lat": item["lat"], "lon": item["lon"], "address": item["display_name"]}
         except http.client.HTTPException:
-            print("There was an error with the HTTP request")
-            sys.exit()
+            Utils.log_info("Error: There was an error with the HTTP request")
 
-    def get_route_attributes(self, trip_code: str, source: Coord, destination: Coord) -> RouteInfo:
+            return None
+
+    def get_route_attributes(self, trip_code: str, source: Coord, destination: Coord) -> RouteInfo | None:
         try:
             conn = http.client.HTTPSConnection(self.routing_host)
             payload = json.dumps({
@@ -150,11 +203,35 @@ class CoordService:
                 "destination": {"lat": destination["lat"], "lon": destination["lon"]},
             }
         except http.client.HTTPException:
-            print("There was an error with the HTTP request")
-            sys.exit()
+            Utils.log_info("Error: There was an error with the HTTP request")
+
+            return None
 
 
 class DataHandler:
+    """
+    Handles data loading, transformation, and output file generation.
+
+    The DataHandler class processes CSV input files and extracts relevant location and trip
+    data. It also transforms raw data into structured format and writes out results.
+
+    Attributes:
+        input_path (str): Path to the input CSV file.
+        output_path (str): Path to the output CSV file.
+        source_data (list): Raw data loaded from the input file.
+        locations (list): List of unique locations extracted from source data.
+        routes (list): List of resolved routes.
+        trips (list): Final list of trip data for output.
+    Methods:
+        - get_location_object(name: str): Finds a Location instance in the locations list
+          by matching the given location name.
+        - get_route_object(trip_code: str): Searches for a resolved RouteInfo instance using
+          the trip code.
+        - generate_output(): Compiles trip data and writes to the output CSV file.
+        - save_output_file(data: list[TripInfo]): Takes trip data and outputs it to the
+          designated output CSV file.
+    """
+
     input_path: str
     output_path: str
     source_data = []
@@ -163,6 +240,15 @@ class DataHandler:
     trips: list[TripInfo] = []
 
     def __init__(self, input_path: str, output_path: str) -> None:
+        """
+        Initializes the DataHandler with specified paths for input and output files.
+
+
+        Args:
+            input_path (str): Path to the input CSV file.
+            output_path (str): Path to the output CSV file.
+        """
+
         self.input_path = input_path
         self.output_path = output_path
         self.__load()
@@ -245,8 +331,27 @@ class DataHandler:
             Utils.log_info("There was an error writing to {0}".format(self.input_path))
             sys.exit()
 
-
 class DataProcessing:
+    """
+    Coordinates the asynchronous processing of locations and routes.
+
+    The DataProcessing class leverages asynchronous functions to handle large datasets
+    efficiently, minimizing blocking I/O during geocode and route resolution.
+    Coordinates the processing of locations and route information.
+    Attributes:
+        data (DataHandler): An instance of DataHandler to manage data transformation.
+        service (CoordService): An instance of CoordService to provide coordinates and
+          routing information services.
+        location_pool (list[Location]): A pool of resolved locations used for processing routes.
+        service (CoordService): Service for resolving coordinates and routes.
+    Methods:
+- bootstrap(data: DataHandler, service: CoordService): Initializes data processing by
+          resolving coordinates and retrieving route data.
+        - __geocode_coords(): Asynchronously processes and resolves geographic coordinates
+          for each location.
+        - __process_routes(): Asynchronously fetches route details based on resolved
+          locations and source input data.
+    """
     data: DataHandler
     service: CoordService
     location_pool: list[Location]
@@ -257,6 +362,16 @@ class DataProcessing:
 
     @classmethod
     async def bootstrap(cls, data: DataHandler, service: CoordService):
+        """
+       Bootstrap the data processing with geocoding and routing services.
+
+       Args:
+           data (DataHandler): Data handler for source and processed data.
+           service (CoordService): Service for resolving coordinates and routes.
+
+       Returns:
+           DataProcessing: An initialized DataProcessing instance.
+       """
         self = cls(data, service)
         self.location_pool = await self.__geocode_coords()
         self.data.routes = await self.__process_routes()
