@@ -9,7 +9,7 @@ All included script very much aspire to always be self contained and are only me
 
 - [Chunked async excustion](./chunked_async.py)
 - [Trip route distance and ETA resolver](./trip_resolver.py)
-- [Long running background tasks - Draft](./background_tasks.py)
+- [Long running background tasks](./simple_background_tasks.py)
 
 ---
 
