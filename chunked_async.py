@@ -27,13 +27,43 @@ task_delay: float = 1.25
 max_chunk_task_delay: float = 7.5
 
 def get_chunks(items: list[int], step: int) -> list[list[int]]:
+    """
+    Divide a list into smaller chunks of a given size.
+
+    Args:
+        items (list[int]): The list of items to chunk.
+        step (int): The size of each chunk.
+
+    Returns:
+        list[list[int]]: A list of chunks.
+    """
+    
     return [items[i:i + step] for i in range(0, len(items), step)]
 
 async def run_chunk(item: int) -> None:
-        await asyncio.sleep(task_delay)
-        print("Executing item => {0}".format(item))
+    """
+    Simulate processing of an individual item with a delay.
+
+    Args:
+        item (int): The item to process.
+
+    Returns:
+        None
+    """
+    await asyncio.sleep(task_delay)
+    print("Executing item => {0}".format(item))
     
 async def run_async_chunks(chunks: list[int]) -> None:
+    """
+    Asynchronously process a list of items (chunk) with a delay.
+
+    Args:
+        chunks (list[int]): The list of items in the current chunk.
+
+    Returns:
+        None
+    """
+    
     # A random float for simulating a delay in seconds for demonstration only
     delay: float = uniform(0.1, max_chunk_task_delay)
     
@@ -43,6 +73,16 @@ async def run_async_chunks(chunks: list[int]) -> None:
     await asyncio.gather(*(run_chunk(item) for item in chunks))
 
 async def main() -> None:
+    """
+    Main function to orchestrate asynchronous chunk processing.
+
+    - Divides the list of items into chunks.
+    - Processes each chunk asynchronously with random delays.
+
+    Returns:
+        None
+    """
+    
     items: list[int] = list(range(0, total_item))
     chunked_items = list(get_chunks(items, chunk_count))
     
@@ -51,5 +91,5 @@ async def main() -> None:
     await asyncio.gather(*tasks)
 
 
-asyncio.run(main())
-
+if __name__ == "__main__":
+    asyncio.run(main())
