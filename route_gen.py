@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-'''
+"""
 Copyright (c) 2024 drolx Labs
 
 Licensed under the MIT License
@@ -15,8 +15,8 @@ limitations under the License.
 Author: Godwin peter .O (me@godwin.dev)
 Created At: Thursday, 7th Nov 2024
 Modified By: Godwin peter .O
-Modified At: Sat Nov 09 2024
-'''
+Modified At: Sat Dec 07 2024
+"""
 
 import csv
 import sys
@@ -25,7 +25,6 @@ import urllib.parse
 import json
 import re
 import asyncio
-import pprint
 from typing import TypedDict
 from itertools import batched
 from datetime import datetime
@@ -61,7 +60,7 @@ TripInfo = TypedDict("TripInfo", {
     "destination_coords": str,
 })
 
-class utils:
+class Utils:
     @classmethod
     def current_time(cls) -> str:
         now = datetime.now()
@@ -74,11 +73,11 @@ class utils:
     
     @classmethod
     def format_time(cls, value: float) -> str:
-        rt = relativedelta(seconds=value)
+        rt = relativedelta(seconds=int(value))
         
         return "{:02d}:{:02d}:{:02d}".format(int(rt.hours), int(rt.minutes), int(rt.seconds))
 
-class coord_service:
+class CoordService:
     geocoding_host: str
     routing_host: str
     headers = {
@@ -154,7 +153,7 @@ class coord_service:
 
 
 
-class data_handler:
+class DataHandler:
     input_path: str
     output_path: str
     source_data = []
@@ -191,7 +190,7 @@ class data_handler:
                     line_item["trip_code"] = trip_code.lower()
 
         except IOError:
-           utils.log_info("There was an error reading file {0}".format(self.input_path))
+           Utils.log_info("There was an error reading file {0}".format(self.input_path))
            sys.exit()
 
 
@@ -203,22 +202,23 @@ class data_handler:
                 check_source = self.get_location_object(trip_source)
                 check_destination = self.get_location_object(trip_destination)
                 
-                if(check_source is None or len(check_source) < 1):
+                if check_source is None or len(check_source) < 1:
                     self.locations.append({ 'name': trip_source })
-                if(check_destination is None or len(check_destination) < 1):
+                if check_destination is None or len(check_destination) < 1:
                     self.locations.append({ 'name': trip_destination })
 
-        utils.log_info("Loaded {0} locations for processing...".format(len(self.locations)))
+        Utils.log_info("Loaded {0} locations for processing...".format(len(self.locations)))
 
 
     def generate_output(self) -> None:
-        if(len(self.routes) > 0):
+        if len(self.routes) > 0:
             for loc in self.source_data:
                 route: RouteInfo = self.get_route_object(loc["trip_code"])
+                # noinspection PyTypeChecker
                 self.trips.append({
                     "trip_code": loc["trip_code"],
                     "length": route["length"],
-                    "time":  utils.format_time(route["time"]),
+                    "time":  Utils.format_time(route["time"]),
                     "source": loc["source"],
                     "source_coords": "{0}, {1}".format(route["source"]["lat"], route["source"]["lon"]),
                     "destination": loc["destination"],
@@ -227,7 +227,7 @@ class data_handler:
             
             self.save_output_file(self.trips)
         else:
-            utils.log_info("Error: No route information resolved...")
+            Utils.log_info("Error: No route information resolved...")
     
     def save_output_file(self, data: list[TripInfo]) -> None:
         # Get the keys from the first dictionary as the header
@@ -235,35 +235,31 @@ class data_handler:
 
         try:
             # Open the file in write mode
-            with open(self.output_path, 'w', newline='') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=keys)
+            with open(self.output_path, 'w', newline='') as csv_file:
+                writer = csv.DictWriter(csv_file, fieldnames=keys)
                 writer.writeheader()
                 writer.writerows(data)
         
-            utils.log_info("Successfully outputted resolved trips...")
+            Utils.log_info("Successfully outputted resolved trips...")
         except IOError:
-            utils.log_info("There was an error writing to {0}".format(self.input_path))
+            Utils.log_info("There was an error writing to {0}".format(self.input_path))
             sys.exit()
-            
 
 
-
-class data_processing:
-    data: data_handler
-    service: coord_service
+class DataProcessing:
+    data: DataHandler
+    service: CoordService
     location_pool: list[Location]
     
-    def __init__(self, data: data_handler, service: coord_service) -> None:
+    def __init__(self, data: DataHandler, service: CoordService) -> None:
         self.data = data
         self.service = service
     
     @classmethod
-    async def bootstrap(cls, data: data_handler, service: coord_service):
+    async def bootstrap(cls, data: DataHandler, service: CoordService):
         self = cls(data, service)
-        
-        ## Execute constrcutor async method
-        self.location_pool = await self.__geocode_coords();
-        self.data.routes = await self.__process_routes();
+        self.location_pool = await self.__geocode_coords()
+        self.data.routes = await self.__process_routes()
         
         return self
 
@@ -274,12 +270,12 @@ class data_processing:
             await asyncio.sleep(delay)
             
             response = self.service.get_coords(name)
-            utils.log_info("Name: {0}, Lat: {1}, Lon: {2}".format(response["name"], response["lat"], response["lon"]))
+            Utils.log_info("Name: {0}, Lat: {1}, Lon: {2}".format(response["name"], response["lat"], response["lon"]))
             
             return response
 
         async def exec_chunked(location_chunk: list[Location]):
-            chunk_tasks = [resolve_location(loc["name"], global_http_delay) for loc in location_chunk]
+            chunk_tasks = [resolve_location(location_item["name"], global_http_delay) for location_item in location_chunk]
             result = await asyncio.gather(*chunk_tasks)
             
             return result
@@ -288,37 +284,37 @@ class data_processing:
             chunked_locations = list(batched(self.data.locations, global_http_chunks))
             tasks = [exec_chunked(loc_chunks) for loc_chunks in chunked_locations]
             
-            utils.log_info("Started resolving {0} locations for coordinates...".format(len(self.data.locations)))
+            Utils.log_info("Started resolving {0} locations for coordinates...".format(len(self.data.locations)))
             grouped_location: list[list[Location]] = await asyncio.gather(*tasks)
             
-            utils.log_info("Completed resolving locations...")
+            Utils.log_info("Completed resolving locations...")
 
-            all = [item for sublist in grouped_location for item in sublist]
+            resolved_locations: list[Location] = [item for sublist in grouped_location for item in sublist]
             
             # update tagged data
             for local_item in self.data.locations:
-                loc: Location = next((item for item in all if item['name'] == local_item["name"]), None)
+                loc: Location = next((item for item in resolved_locations if item['name'] == local_item["name"]), None)
                 local_item.update(loc)
                     
-            return all
+            return resolved_locations
             
-        except Exception:
-            utils.log_info('Error processing coordinates...')
+        except Exception as error:
+            Utils.log_info('Error processing coordinates... {0}'.format(error))
             return []
 
     async def __process_routes(self) -> list[TripInfo]:
         try:
-            if(len(self.location_pool) > 0):
+            if len(self.location_pool) > 0:
                 query_data: list = self.data.source_data
                 
-                async def exec_delayed(trip_code: str, source: Coord, destination: Coord) -> RouteInfo:
+                async def exec_delayed(input_trip_code: str, input_source: Coord, input_destination: Coord) -> RouteInfo:
                     await asyncio.sleep(global_http_delay)
-                    response: RouteInfo = self.service.get_route_attributes(trip_code, source, destination)
+                    response: RouteInfo = self.service.get_route_attributes(input_trip_code, input_source, input_destination)
                     distance = "{0}KM".format(response["length"])
                     
-                    utils.log_info("Route:{0}, Time: {1}, Distance: {2}".format(
-                        trip_code,
-                        utils.format_time(response["time"]),
+                    Utils.log_info("Route:{0}, Time: {1}, Distance: {2}".format(
+                        input_trip_code,
+                        Utils.format_time(float(response["time"])),
                         distance
                     ))
                     
@@ -338,12 +334,12 @@ class data_processing:
                 return await asyncio.gather(*tasks)
             
         except Exception as error:
-            utils.log_info('Error processing route information'.format(error))
+            Utils.log_info('Error processing route information'.format(error))
             
         return []
 
 async def main():
-    proc = await data_processing.bootstrap(data_handler(global_input_file, global_output_file), coord_service(global_nominatim_url, global_routing_host))
+    proc = await DataProcessing.bootstrap(DataHandler(global_input_file, global_output_file), CoordService(global_nominatim_url, global_routing_host))
     
     proc.data.generate_output()
 
