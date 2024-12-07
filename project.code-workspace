@@ -20,7 +20,7 @@
 			"spacesBetweenYears": true,
 			"license": "MIT",
 			"initials": "GP",
-			"company": "drolx Labs",
+			"company": "Godwin Peter .O",
 			"creationDateZero": "asIs",
 			"hostname": "drolx.com"
 		},
@@ -69,11 +69,20 @@
 			"excludeGlob": [
 				"./**/.env",
 				"./**/.env*",
-				"./**/*/ignoreme.*"
+				"./**/*/ignoreme.*",
+				"./.gitignore"
 			],
 			"autoHeader": "autoSave",
-			"enforceHeader": true,
+			"enforceHeader": false,
 			"updateLicenseVariables": false
 		}
+	},
+	"extensions": {
+		"recommendations": [
+			"donjayamanne.python-extension-pack",
+			"psioniq.psi-header",
+			"redhat.vscode-yaml",
+			"yzhang.markdown-all-in-one"
+		]
 	},
 }
