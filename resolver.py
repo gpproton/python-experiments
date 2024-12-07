@@ -228,6 +228,7 @@ class DataHandler:
         else:
             Utils.log_info("Error: No route information resolved...")
 
+    # noinspection PyTypeChecker
     def save_output_file(self, data: list[TripInfo]) -> None:
         # Get the keys from the first dictionary as the header
         keys = data[0].keys()
@@ -272,7 +273,7 @@ class DataProcessing:
 
             return response
 
-        async def exec_chunked(location_chunk: list[Location]):
+        async def exec_chunked(location_chunk: list[Location] | tuple[dict[str, str | float], ...]) -> list[Location]:
             chunk_tasks = [resolve_location(location_item["name"], global_http_delay) for location_item in
                            location_chunk]
             result = await asyncio.gather(*chunk_tasks)
